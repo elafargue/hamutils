@@ -7,8 +7,14 @@ Key behaviors:
 - Finds "fm <SRC> to <DST> via ..." anywhere in the line (syslog-safe).
 - VIA capture ends at 'ctl', 'pid=', 'len', or end-of-line.
 - For each starred hop X* we add X -> nextHop.
+- Identifies nodes I can hear directly (last starred node in each path).
+- Colors hearable nodes differently in DOT/Mermaid output.
 - Optional: add SRC -> firstStarredHop with --include-origins.
 - Optional: show all calls (including leaf/isolated) with --emit-isolated.
+
+In AX.25 digipeater paths, the asterisk (*) indicates a digipeater has been "used" 
+or "has repeated" the packet. The last digipeater with an asterisk is the one we 
+can hear directly - it's our gateway into the network.
 
 Usage:
   python ax25_graph.py -i listen.log > graph.dot
@@ -48,10 +54,12 @@ def parse_graph(lines, keep_ssid=False, include_origins=False):
       edges: set[(a,b)]
       counts: dict[(a,b)] -> int
       nodes_all: set[str] of every callsign seen (SRC + VIA tokens)
+      hearable_nodes: set[str] of nodes I can hear directly (last starred in paths)
     """
     edges = set()
     counts = defaultdict(int)
     nodes_all = set()
+    hearable_nodes = set()
 
     for line in lines:
         # Ensure we're operating on a plain str
@@ -81,6 +89,15 @@ def parse_graph(lines, keep_ssid=False, include_origins=False):
             if c:
                 nodes_all.add(c)
 
+        # Find the last starred node (the one I can hear)
+        last_starred_node = None
+        for tok in tokens:
+            if "*" in tok:
+                last_starred_node = strip_ssid(tok.replace("*", ""), keep_ssid)
+        
+        if last_starred_node:
+            hearable_nodes.add(last_starred_node)
+
         # Build hop->next edges for each starred hop
         first_star_idx = None
         for i, tok in enumerate(tokens):
@@ -101,9 +118,9 @@ def parse_graph(lines, keep_ssid=False, include_origins=False):
                 edges.add((src, first_star))
                 counts[(src, first_star)] += 1
 
-    return edges, counts, nodes_all
+    return edges, counts, nodes_all, hearable_nodes
 
-def emit_dot(edges, counts, nodes_all=None, directed=False, emit_isolated=False, out=sys.stdout):
+def emit_dot(edges, counts, nodes_all=None, hearable_nodes=None, directed=False, emit_isolated=False, out=sys.stdout):
     gtype = "digraph" if directed else "graph"
     conn = "->" if directed else "--"
     print(f"{gtype} G {{", file=out)
@@ -117,15 +134,24 @@ def emit_dot(edges, counts, nodes_all=None, directed=False, emit_isolated=False,
     if emit_isolated and nodes_all:
         nodes |= set(nodes_all)
 
+    # Color nodes I can hear differently
+    if hearable_nodes is None:
+        hearable_nodes = set()
+
     for n in sorted(nodes):
-        print(f'  "{n}";', file=out)
+        if n in hearable_nodes:
+            # Nodes I can hear - use orange/red color
+            print(f'  "{n}" [fillcolor="#ffaa66"];', file=out)
+        else:
+            # Regular nodes - use default blue color
+            print(f'  "{n}";', file=out)
 
     for (a, b) in sorted(edges):
         label = counts.get((a, b), 1)
         print(f'  "{a}" {conn} "{b}" [label="{label}"];', file=out)
     print("}", file=out)
 
-def emit_mermaid(edges, counts, nodes_all=None, directed=False, emit_isolated=False, out=sys.stdout):
+def emit_mermaid(edges, counts, nodes_all=None, hearable_nodes=None, directed=False, emit_isolated=False, out=sys.stdout):
     arrow = "-->" if directed else "---"
     print("flowchart LR", file=out)
 
@@ -136,14 +162,27 @@ def emit_mermaid(edges, counts, nodes_all=None, directed=False, emit_isolated=Fa
     if emit_isolated and nodes_all:
         nodes |= set(nodes_all)
 
+    # Color nodes I can hear differently  
+    if hearable_nodes is None:
+        hearable_nodes = set()
+
     for n in sorted(nodes):
         safe = n.replace('-', '_')
-        print(f'  {safe}["{n}"]', file=out)
+        if n in hearable_nodes:
+            # Nodes I can hear - use orange styling
+            print(f'  {safe}["{n}"]:::hearable', file=out)
+        else:
+            # Regular nodes
+            print(f'  {safe}["{n}"]', file=out)
 
     for (a, b) in sorted(edges):
         label = counts.get((a, b), 1)
         sa = a.replace('-', '_'); sb = b.replace('-', '_')
         print(f'  {sa} {arrow} |{label}| {sb}', file=out)
+    
+    # Add styling for hearable nodes
+    if hearable_nodes:
+        print("  classDef hearable fill:#ffaa66,stroke:#ff6600,stroke-width:2px", file=out)
 
 def emit_edges_tsv(edges, counts, nodes_all=None, emit_isolated=False, out=sys.stdout):
     print("from\tto\tcount", file=out)
@@ -170,16 +209,16 @@ def main():
 
     lines = sys.stdin.readlines() if not args.input else open(args.input, "r", encoding="utf-8", errors="ignore").readlines()
 
-    edges, counts, nodes_all = parse_graph(
+    edges, counts, nodes_all, hearable_nodes = parse_graph(
         lines,
         keep_ssid=args.keep_ssid,
         include_origins=args.include_origins
     )
 
     if args.format == "dot":
-        emit_dot(edges, counts, nodes_all, directed=args.directed, emit_isolated=args.emit_isolated)
+        emit_dot(edges, counts, nodes_all, hearable_nodes, directed=args.directed, emit_isolated=args.emit_isolated)
     elif args.format == "mermaid":
-        emit_mermaid(edges, counts, nodes_all, directed=args.directed, emit_isolated=args.emit_isolated)
+        emit_mermaid(edges, counts, nodes_all, hearable_nodes, directed=args.directed, emit_isolated=args.emit_isolated)
     else:
         emit_edges_tsv(edges, counts, nodes_all, emit_isolated=args.emit_isolated)
 
