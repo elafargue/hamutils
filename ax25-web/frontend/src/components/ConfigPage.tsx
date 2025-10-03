@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Save, FolderOpen, AlertCircle, CheckCircle } from 'lucide-react';
-import { getApiUrl } from '../config/api';
+import { getApiEndpoint } from '../config/api';
 
 interface Config {
   log_file_path: string;
@@ -23,7 +23,7 @@ const ConfigPage: React.FC = () => {
   useEffect(() => {
     const loadConfig = async () => {
       try {
-        const response = await fetch(getApiUrl('/config'));
+        const response = await fetch(getApiEndpoint('/config'));
         if (response.ok) {
           const data = await response.json();
           setConfig(data);
@@ -41,7 +41,7 @@ const ConfigPage: React.FC = () => {
     setMessage(null);
 
     try {
-      const response = await fetch(getApiUrl('/config'), {
+      const response = await fetch(getApiEndpoint('/config'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
