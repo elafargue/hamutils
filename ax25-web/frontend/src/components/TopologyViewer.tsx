@@ -19,6 +19,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { RefreshCw, Eye, EyeOff, Shuffle, Network, Target, Save, Download } from 'lucide-react';
+import { getApiUrl, getWebSocketUrl } from '../config/api';
 
 interface AX25Node {
   id: string;
@@ -1442,7 +1443,7 @@ const TopologyViewerContent: React.FC = () => {
   const fetchTopology = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/topology');
+      const response = await fetch(getApiUrl('/topology'));
       if (response.ok) {
         const data: TopologyData = await response.json();
         setAllNodes(data.nodes);
@@ -1569,7 +1570,7 @@ const TopologyViewerContent: React.FC = () => {
       }
       
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//localhost:8000/ws`;
+      const wsUrl = getWebSocketUrl('/ws');
       
       console.log(`🔌 WebSocket: Connecting to ${wsUrl} (attempt ${reconnectionAttemptsRef.current + 1}/3)`);
       
@@ -1791,7 +1792,7 @@ const TopologyViewerContent: React.FC = () => {
         };
       });
 
-      const response = await fetch('http://localhost:8000/layout/save', {
+      const response = await fetch(getApiUrl('/layout/save'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1823,7 +1824,7 @@ const TopologyViewerContent: React.FC = () => {
   const restoreLayoutPositions = async () => {
     setIsRestoring(true);
     try {
-      const response = await fetch(`http://localhost:8000/layout/restore/${layoutAlgorithm}`);
+      const response = await fetch(getApiUrl(`/layout/restore/${layoutAlgorithm}`));
       
       if (response.ok) {
         const result = await response.json();
