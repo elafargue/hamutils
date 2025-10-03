@@ -2,12 +2,16 @@
 """
 AX25 Network Parser - Based on ax25_graph.py
 Extracts network topology and hearable nodes from AX25 listen logs
+Also tracks ID and BEACON stations
 """
 
 import re
+import json
+import os
 from collections import defaultdict
-from typing import Set, Dict, Tuple, List
+from typing import Set, Dict, Tuple, List, Optional
 from dataclasses import dataclass
+from datetime import datetime
 
 @dataclass
 class NetworkTopology:
@@ -159,3 +163,171 @@ class AX25Parser:
                 node_counts={},
                 edge_counts={}
             )
+
+
+@dataclass
+class NodeRecord:
+    """Represents a single node's information from ID/BEACON packets"""
+    callsign: str
+    latest_payload: str
+    last_timestamp: str
+    packet_type: str  # "ID" or "BEACON"
+    first_seen: str
+
+
+class NodeDatabase:
+    """Manages a database of nodes that have sent ID or BEACON packets"""
+    
+    def __init__(self, db_file: str = "nodes_database.json"):
+        self.db_file = db_file
+        self.nodes: Dict[str, NodeRecord] = {}
+        self.load_database()
+        
+        # Regex patterns for parsing packets
+        self.packet_header_re = re.compile(r"\bfm\s+(\S+)\s+to\s+(ID|BEACON)", re.IGNORECASE)
+        self.timestamp_re = re.compile(r"(\d{2}:\d{2}:\d{2}(?:\.\d+)?)")
+        self.payload_re = re.compile(r"(\d{4})\s+(.+)", re.IGNORECASE)  # Use search, not match
+    
+    def load_database(self):
+        """Load existing node database from file"""
+        if os.path.exists(self.db_file):
+            try:
+                with open(self.db_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self.nodes = {
+                        callsign: NodeRecord(**record_data) 
+                        for callsign, record_data in data.items()
+                    }
+            except Exception as e:
+                print(f"Error loading node database: {e}")
+                self.nodes = {}
+        else:
+            self.nodes = {}
+    
+    def save_database(self):
+        """Save node database to file"""
+        try:
+            data = {
+                callsign: {
+                    'callsign': record.callsign,
+                    'latest_payload': record.latest_payload,
+                    'last_timestamp': record.last_timestamp,
+                    'packet_type': record.packet_type,
+                    'first_seen': record.first_seen
+                }
+                for callsign, record in self.nodes.items()
+            }
+            
+            with open(self.db_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"Error saving node database: {e}")
+    
+    def parse_lines(self, lines: List[str]):
+        """Parse lines and extract ID/BEACON packets with multi-line payloads"""
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            # Look for packet header
+            header_match = self.packet_header_re.search(line)
+            if header_match:
+                callsign = header_match.group(1)
+                packet_type = header_match.group(2).upper()
+                
+                # Extract timestamp
+                timestamp_match = self.timestamp_re.search(line)
+                timestamp = timestamp_match.group(1) if timestamp_match else "unknown"
+                
+                # Collect multi-line payload
+                payload_parts = []
+                j = i + 1
+                
+                # Look for payload lines starting with hex offsets (0000, 0040, etc.)
+                while j < len(lines):
+                    payload_line = lines[j].strip()
+                    
+                    # Check if this line is a payload line with hex offset
+                    payload_match = self.payload_re.search(payload_line)  # Use search instead of match
+                    if payload_match:
+                        offset = payload_match.group(1)
+                        content = payload_match.group(2)
+                        payload_parts.append(content)
+                        j += 1
+                    else:
+                        # No more payload lines, break
+                        break
+                
+                # Join all payload parts into a single string
+                payload = " ".join(payload_parts).strip()
+                
+                # Update or create node record
+                self.update_node(callsign, payload, timestamp, packet_type)
+                
+                # Continue from where we left off
+                i = j
+            else:
+                i += 1
+    
+    def update_node(self, callsign: str, payload: str, timestamp: str, packet_type: str):
+        """Update or create a node record"""
+        if callsign in self.nodes:
+            # Update existing record
+            self.nodes[callsign].latest_payload = payload
+            self.nodes[callsign].last_timestamp = timestamp
+            self.nodes[callsign].packet_type = packet_type
+        else:
+            # Create new record
+            self.nodes[callsign] = NodeRecord(
+                callsign=callsign,
+                latest_payload=payload,
+                last_timestamp=timestamp,
+                packet_type=packet_type,
+                first_seen=timestamp
+            )
+    
+    def parse_file(self, filepath: str):
+        """Parse an AX25 log file and update node database"""
+        try:
+            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                lines = f.readlines()
+            self.parse_lines(lines)
+            self.save_database()
+        except Exception as e:
+            print(f"Error parsing file {filepath} for node database: {e}")
+    
+    def get_all_nodes(self, limit: Optional[int] = None, offset: int = 0) -> Dict:
+        """Get all nodes with pagination support"""
+        sorted_nodes = sorted(
+            self.nodes.values(),
+            key=lambda x: x.last_timestamp,
+            reverse=True
+        )
+        
+        total_count = len(sorted_nodes)
+        
+        if limit is not None:
+            end_idx = offset + limit
+            paginated_nodes = sorted_nodes[offset:end_idx]
+        else:
+            paginated_nodes = sorted_nodes[offset:]
+        
+        return {
+            'nodes': [
+                {
+                    'callsign': node.callsign,
+                    'latest_payload': node.latest_payload,
+                    'last_timestamp': node.last_timestamp,
+                    'packet_type': node.packet_type,
+                    'first_seen': node.first_seen
+                }
+                for node in paginated_nodes
+            ],
+            'total_count': total_count,
+            'offset': offset,
+            'limit': limit
+        }
+    
+    def get_node(self, callsign: str) -> Optional[NodeRecord]:
+        """Get a specific node by callsign"""
+        return self.nodes.get(callsign)

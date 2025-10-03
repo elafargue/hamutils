@@ -2148,7 +2148,7 @@ const TopologyViewerContent: React.FC = () => {
               border: '2px solid #ff6600',
               borderRadius: '4px'
             }}></div>
-            <span>Hearable nodes</span>
+            <span>Heard directly</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{

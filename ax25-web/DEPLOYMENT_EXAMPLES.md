@@ -1,6 +1,6 @@
 # AX25-Web Deployment Examples
 
-## Example 1: Custom Port (Port 8080)
+## Example 1: Custom Port (Port 8080 for API, port 3001 for frontend)
 
 ### Backend Configuration
 Edit `backend/.env`:
@@ -10,9 +10,11 @@ AX25_BACKEND_PORT=8080
 ```
 
 ### Frontend Configuration  
+
 Edit `frontend/.env`:
 ```bash
 REACT_APP_API_BASE_URL=http://localhost:8080
+PORT=3001
 ```
 
 ### Running the Services

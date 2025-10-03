@@ -39,7 +39,7 @@ code {
 .main-content {
   flex: 1;
   padding: 2rem;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .landing-page {

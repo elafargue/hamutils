@@ -31,6 +31,15 @@ const Header: React.FC = () => {
           Network Topology
         </Link>
         <Link 
+          to="/nodes" 
+          style={{ 
+            color: location.pathname === '/nodes' ? '#60a5fa' : '#d1d5db',
+            textDecoration: 'none'
+          }}
+        >
+          Nodes Database
+        </Link>
+        <Link 
           to="/config" 
           style={{ 
             color: location.pathname === '/config' ? '#60a5fa' : '#d1d5db',

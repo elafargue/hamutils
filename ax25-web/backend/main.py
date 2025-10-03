@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from ax25_parser import AX25Parser, NetworkTopology
+from ax25_parser import AX25Parser, NetworkTopology, NodeDatabase
 
 class LogFileWatcher(FileSystemEventHandler):
     """Watches for changes to log files and notifies connected clients"""
@@ -65,6 +65,7 @@ class AX25WebApp:
     def __init__(self):
         self.app = FastAPI(title="AX25 Network Visualizer", version="1.0.0")
         self.parser = AX25Parser()
+        self.node_database = NodeDatabase()
         self.connection_manager = ConnectionManager()
         self.config = {
             "log_file_path": None,
@@ -236,6 +237,76 @@ class AX25WebApp:
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Failed to list layouts: {str(e)}")
         
+        @self.app.get("/nodes")
+        async def get_nodes(page: int = 1, limit: int = 30):
+            """Get paginated list of nodes that have sent ID or BEACON packets"""
+            try:
+                if page < 1:
+                    raise HTTPException(status_code=400, detail="Page number must be >= 1")
+                
+                if limit < 1 or limit > 100:
+                    raise HTTPException(status_code=400, detail="Limit must be between 1 and 100")
+                
+                offset = (page - 1) * limit
+                result = self.node_database.get_all_nodes(limit=limit, offset=offset)
+                
+                total_pages = (result['total_count'] + limit - 1) // limit
+                
+                return {
+                    "nodes": result['nodes'],
+                    "pagination": {
+                        "current_page": page,
+                        "total_pages": total_pages,
+                        "total_count": result['total_count'],
+                        "limit": limit,
+                        "has_next": page < total_pages,
+                        "has_previous": page > 1
+                    }
+                }
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to get nodes: {str(e)}")
+        
+        @self.app.get("/nodes/{callsign}")
+        async def get_node(callsign: str):
+            """Get specific node information by callsign"""
+            node = self.node_database.get_node(callsign.upper())
+            if not node:
+                raise HTTPException(status_code=404, detail=f"Node {callsign} not found")
+            
+            return {
+                "callsign": node.callsign,
+                "latest_payload": node.latest_payload,
+                "last_timestamp": node.last_timestamp,
+                "packet_type": node.packet_type,
+                "first_seen": node.first_seen
+            }
+        
+        @self.app.post("/nodes/refresh")
+        async def refresh_nodes():
+            """Force refresh of node database from current log file"""
+            if not self.config["log_file_path"]:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="No log file configured. Please configure a log file path in the Configuration page first."
+                )
+            
+            if not os.path.exists(self.config["log_file_path"]):
+                raise HTTPException(
+                    status_code=404, 
+                    detail=f"Log file not found: {self.config['log_file_path']}"
+                )
+            
+            try:
+                self.node_database.parse_file(self.config["log_file_path"])
+                total_nodes = len(self.node_database.nodes)
+                return {
+                    "message": "Node database refreshed successfully",
+                    "total_nodes": total_nodes,
+                    "log_file_path": self.config["log_file_path"]
+                }
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to refresh nodes: {str(e)}")
+        
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):
             """WebSocket endpoint for real-time updates"""
@@ -281,7 +352,7 @@ class AX25WebApp:
         }
     
     async def update_topology(self):
-        """Parse log file and update current topology"""
+        """Parse log file and update current topology and node database"""
         if not self.config["log_file_path"]:
             return
         
@@ -290,8 +361,12 @@ class AX25WebApp:
                 self.config["log_file_path"],
                 keep_ssid=self.config["keep_ssid"]
             )
+            
+            # Also update the node database
+            self.node_database.parse_file(self.config["log_file_path"])
+            
         except Exception as e:
-            print(f"Error updating topology: {e}")
+            print(f"Error updating topology and node database: {e}")
     
     async def start_watching(self):
         """Start watching log file for changes"""
