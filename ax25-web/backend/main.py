@@ -325,8 +325,13 @@ app = ax25_app.app
 
 if __name__ == "__main__":
     import uvicorn
+    
+    # Get port from environment variable or default to 8000
+    port = int(os.getenv("AX25_BACKEND_PORT", "8000"))
+    host = os.getenv("AX25_BACKEND_HOST", "0.0.0.0")
+    
     print("🚀 Starting AX25 Network Visualizer Backend...")
-    print("📍 Server will be running at: http://localhost:8000")
-    print("📖 API Documentation at: http://localhost:8000/docs")
+    print(f"📍 Server will be running at: http://{host}:{port}")
+    print(f"📖 API Documentation at: http://{host}:{port}/docs")
     print("⏹️  Press Ctrl+C to stop the server\n")
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host=host, port=port, reload=True)
