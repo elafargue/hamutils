@@ -1,0 +1,89 @@
+/* Custom styles for NodesPage component */
+
+/* Subtle alternating row colors */
+.bg-gray-25 {
+  background-color: #fafafa;
+}
+
+.bg-blue-25 {
+  background-color: #eff6ff;
+}
+
+/* Enhanced hover states */
+.hover\:bg-blue-25:hover {
+  background-color: #eff6ff;
+}
+
+/* Smooth transitions */
+.transition-colors {
+  transition-property: color, background-color, border-color;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+.transition-all {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
+
+/* Table styling enhancements */
+.nodes-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.nodes-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* Enhanced shadows */
+.shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.shadow-md {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Button hover effects */
+.hover\:shadow-lg:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Responsive design improvements */
+@media (max-width: 768px) {
+  .nodes-table th,
+  .nodes-table td {
+    padding: 0.75rem 0.5rem;
+  }
+}
+
+/* Better focus states */
+button:focus,
+.focus\:ring-2:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+}
+
+/* Loading state improvements */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Gradient text effect for numbers */
+.gradient-text {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
